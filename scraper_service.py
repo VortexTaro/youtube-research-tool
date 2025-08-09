@@ -12,15 +12,17 @@ except Exception:
 load_dotenv()
 
 def _get_api_key():
-    # Priority: env var -> Streamlit secrets
+    # Priority: Streamlit secrets -> env var
+    if st is not None:
+        try:
+            secret_val = st.secrets.get("SCRAPE_CREATORS_API_KEY")
+            if secret_val:
+                return secret_val
+        except Exception:
+            pass
     env_val = os.getenv("SCRAPE_CREATORS_API_KEY")
     if env_val:
         return env_val
-    if st is not None:
-        try:
-            return st.secrets.get("SCRAPE_CREATORS_API_KEY")
-        except Exception:
-            pass
     return None
 
 API_KEY = _get_api_key()
@@ -32,7 +34,7 @@ def search_youtube(keyword, limit=10):
     On error, returns the error message string.
     """
     if not API_KEY:
-        return "API key for Scrape Creators not found. Please set it in your .env file."
+        return "API key for Scrape Creators not found. Please set it in Streamlit Secrets or environment variable."
 
     headers = {
         "x-api-key": API_KEY,
@@ -57,7 +59,7 @@ def get_channel_details(channel_id):
     On error, returns the error message string.
     """
     if not API_KEY:
-        return "API key for Scrape Creators not found. Please set it in your .env file."
+        return "API key for Scrape Creators not found. Please set it in Streamlit Secrets or environment variable."
 
     headers = {
         "x-api-key": API_KEY,
@@ -98,7 +100,7 @@ def get_transcript_by_url(video_url: str):
     Returns JSON dict on success, or error string on failure.
     """
     if not API_KEY:
-        return "API key for Scrape Creators not found. Please set it in your .env file."
+        return "API key for Scrape Creators not found. Please set it in Streamlit Secrets or environment variable."
 
     platform = _detect_platform_from_url(video_url)
     if platform is None:
