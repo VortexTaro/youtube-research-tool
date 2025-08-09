@@ -66,9 +66,17 @@ with st.expander("任意URLの一括文字起こし (YouTube / TikTok / Instagra
             if results:
                 os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
                 out_path = os.path.join(TRANSCRIPTS_DIR, re.sub(r'[\\/*?:"<>|]', "", custom_bulk_filename))
+                combined_text = "".join(results)
                 with open(out_path, "w", encoding="utf-8") as f:
-                    f.write("".join(results))
+                    f.write(combined_text)
                 status.success(f"保存しました: {out_path}")
+                # ブラウザから直接ダウンロード
+                st.download_button(
+                    label="まとめてダウンロード",
+                    data=combined_text,
+                    file_name=re.sub(r'[\\/*?:"<>|]', "", custom_bulk_filename),
+                    mime="text/plain"
+                )
             else:
                 status.error("文字起こし結果が空だよ。")
 
@@ -221,6 +229,13 @@ if st.session_state.get("videos") is not None:
                                 f.write(full_content)
 
                             st.success(f"Transcript saved to: {filepath}")
+                            # クラウドでも直接DLできるようにボタンを表示
+                            st.download_button(
+                                label="このトランスクリプトをダウンロード",
+                                data=full_content,
+                                file_name=filename,
+                                mime="text/plain"
+                            )
                             with st.expander("View Transcript"):
                                 st.text_area(label="Transcript", value=transcript_text, height=200)
                         else:
@@ -286,5 +301,12 @@ if st.session_state.get("videos"):
                 f.write(combined_content)
 
             bulk_status.success(f"All transcripts saved to: {filepath}")
+            # ブラウザから直接ダウンロード
+            st.download_button(
+                label="すべてまとめてダウンロード",
+                data=combined_content,
+                file_name=filename,
+                mime="text/plain"
+            )
         else:
             bulk_status.error("No transcripts could be downloaded.") 
