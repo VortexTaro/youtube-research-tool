@@ -2,6 +2,7 @@ import os
 import re
 import requests
 from urllib.parse import quote
+import time
 from dotenv import load_dotenv
 
 try:
@@ -28,7 +29,7 @@ def _get_api_key():
 API_KEY = _get_api_key()
 BASE_URL = "https://api.scrapecreators.com/v1"
 
-def search_youtube(keyword, limit=10):
+def search_youtube(keyword, limit=10, hl="ja", gl="JP", max_retries=2, retry_wait_sec=1.5):
     """
     Searches YouTube for videos based on a keyword.
     On error, returns the error message string.
@@ -41,17 +42,23 @@ def search_youtube(keyword, limit=10):
         "Content-Type": "application/json"
     }
     
-    search_url = f"{BASE_URL}/youtube/search?query={keyword}&limit={limit}&hl=ja&gl=JP"
-    
-    try:
-        response = requests.get(search_url, headers=headers)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        error_message = f"API Error: {e}"
-        if hasattr(e, 'response') and e.response is not None:
-            error_message += f" | Status Code: {e.response.status_code} | Response: {e.response.text}"
-        return error_message
+    search_url = f"{BASE_URL}/youtube/search?query={keyword}&limit={limit}&hl={hl}&gl={gl}"
+
+    last_error = None
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.get(search_url, headers=headers)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries:
+                time.sleep(retry_wait_sec)
+                continue
+            error_message = f"API Error: {e}"
+            if hasattr(e, 'response') and e.response is not None:
+                error_message += f" | Status Code: {e.response.status_code} | Response: {e.response.text}"
+            return error_message
 
 def get_channel_details(channel_id):
     """
@@ -92,7 +99,7 @@ def _detect_platform_from_url(video_url: str):
     return None
 
 
-def get_transcript_by_url(video_url: str):
+def get_transcript_by_url(video_url: str, hl: str = "ja", gl: str = "JP", max_retries: int = 2, retry_wait_sec: float = 1.5):
     """
     Gets transcript for a given video URL across supported platforms
     (YouTube, TikTok, Instagram) using ScrapeCreators API.
@@ -114,21 +121,27 @@ def get_transcript_by_url(video_url: str):
     # Build endpoint per platform
     encoded_url = quote(video_url, safe="")
     if platform == "youtube":
-        endpoint = f"{BASE_URL}/youtube/video/transcript?url={encoded_url}&hl=ja&gl=JP"
+        endpoint = f"{BASE_URL}/youtube/video/transcript?url={encoded_url}&hl={hl}&gl={gl}"
     elif platform == "tiktok":
         endpoint = f"{BASE_URL}/tiktok/video/transcript?url={encoded_url}"
     else:  # instagram
         endpoint = f"{BASE_URL}/instagram/video/transcript?url={encoded_url}"
 
-    try:
-        response = requests.get(endpoint, headers=headers)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        error_message = f"API Error getting transcript for URL {video_url}: {e}"
-        if hasattr(e, 'response') and e.response is not None:
-            error_message += f" | Status Code: {e.response.status_code} | Response: {e.response.text}"
-        return error_message
+    last_error = None
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.get(endpoint, headers=headers)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries:
+                time.sleep(retry_wait_sec)
+                continue
+            error_message = f"API Error getting transcript for URL {video_url}: {e}"
+            if hasattr(e, 'response') and e.response is not None:
+                error_message += f" | Status Code: {e.response.status_code} | Response: {e.response.text}"
+            return error_message
 
 
 # Backward-compatible alias for existing YouTube flow inside the app
