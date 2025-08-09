@@ -3,6 +3,7 @@
 This tool allows you to search for YouTube videos by keyword, retrieve a list of videos, and then get the transcript for a selected video.
 
 Additionally, it now supports bulk transcription from arbitrary URLs for YouTube, TikTok, and Instagram.
+This app is now a multi-page Streamlit app.
 
 ## Features
 
@@ -52,14 +53,10 @@ streamlit run app.py
 
 Open your web browser and go to the local URL provided by Streamlit (usually `http://localhost:8501`). 
 
-### Bulk Transcription (YouTube / TikTok / Instagram)
+### Pages
 
-1. Open the expander titled "任意URLの一括文字起こし (YouTube / TikTok / Instagram)".
-2. Paste one URL per line. Supported examples:
-   - `https://www.youtube.com/watch?v=...`
-   - `https://www.tiktok.com/@user/video/...`
-   - `https://www.instagram.com/reel/...`
-3. Click the execute button. A combined transcript file will be saved under the `transcripts` folder.
+- Home: YouTube keyword research and per-video transcript download
+- 任意URLの一括文字起こし: Paste arbitrary URLs (YouTube/TikTok/Instagram), then download the combined transcript
 
 ## Deploy to Streamlit Cloud
 
