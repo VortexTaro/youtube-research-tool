@@ -64,19 +64,35 @@ with st.expander("任意URLの一括文字起こし (YouTube / TikTok / Instagra
                 progress.progress((idx+1)/len(urls))
 
             if results:
-                os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
-                out_path = os.path.join(TRANSCRIPTS_DIR, re.sub(r'[\\/*?:"<>|]', "", custom_bulk_filename))
+                # ここからはデバッグ表示→ユーザー確認→保存/ダウンロードの順にする
                 combined_text = "".join(results)
-                with open(out_path, "w", encoding="utf-8") as f:
-                    f.write(combined_text)
-                status.success(f"保存しました: {out_path}")
-                # ブラウザから直接ダウンロード
-                st.download_button(
-                    label="まとめてダウンロード",
-                    data=combined_text,
-                    file_name=re.sub(r'[\\/*?:"<>|]', "", custom_bulk_filename),
-                    mime="text/plain"
-                )
+                status.success("取得完了。下にサマリー・Rawレスポンス・プレビューを表示するよ。問題なければ保存/ダウンロードしてね。")
+
+                # 簡易サマリー（成功/失敗のみ集計）
+                st.subheader("一括処理サマリー（デバッグ）")
+                ok_count = sum(1 for r in results if "--- START TRANSCRIPT ---" in r)
+                ng_count = len(results) - ok_count
+                st.write({"OK": ok_count, "ERROR": ng_count, "Total": len(results)})
+
+                # 先頭数千文字だけプレビュー
+                st.text_area("結合ファイルプレビュー（先頭部分）", value=combined_text[:5000], height=200)
+
+                # 保存とダウンロード（ユーザー確認後）
+                col_s1, col_s2 = st.columns([1,1])
+                with col_s1:
+                    if st.button("保存する（transcripts/ に書き出し）"):
+                        os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
+                        out_path = os.path.join(TRANSCRIPTS_DIR, re.sub(r'[\\/*?:"<>|]', "", custom_bulk_filename))
+                        with open(out_path, "w", encoding="utf-8") as f:
+                            f.write(combined_text)
+                        st.success(f"保存しました: {out_path}")
+                with col_s2:
+                    st.download_button(
+                        label="まとめてダウンロード",
+                        data=combined_text,
+                        file_name=re.sub(r'[\\/*?:"<>|]', "", custom_bulk_filename),
+                        mime="text/plain"
+                    )
             else:
                 status.error("文字起こし結果が空だよ。")
 
@@ -225,21 +241,32 @@ if st.session_state.get("videos") is not None:
                             )
                             full_content = header + transcript_text
 
-                            with open(filepath, "w", encoding="utf-8") as f:
-                                f.write(full_content)
-
-                            st.success(f"Transcript saved to: {filepath}")
-                            # クラウドでも直接DLできるようにボタンを表示
-                            st.download_button(
-                                label="このトランスクリプトをダウンロード",
-                                data=full_content,
-                                file_name=filename,
-                                mime="text/plain"
-                            )
-                            with st.expander("View Transcript"):
+                            # 先にデバッグ表示（Rawレスポンス・本文プレビュー）
+                            with st.expander("デバッグ：APIレスポンス（Raw）"):
+                                st.json(transcript_data)
+                            with st.expander("プレビュー（保存/ダウンロード前に確認）", expanded=True):
                                 st.text_area(label="Transcript", value=transcript_text, height=200)
+
+                            # 保存とダウンロードをユーザー操作に変更
+                            col1d, col2d = st.columns([1,1])
+                            with col1d:
+                                if st.button("保存する", key=f"save_{i}"):
+                                    with open(filepath, "w", encoding="utf-8") as f:
+                                        f.write(full_content)
+                                    st.success(f"Transcript saved to: {filepath}")
+                            with col2d:
+                                st.download_button(
+                                    label="このトランスクリプトをダウンロード",
+                                    data=full_content,
+                                    file_name=filename,
+                                    mime="text/plain",
+                                    key=f"dl_{i}"
+                                )
                         else:
-                            st.error(f"Could not retrieve transcript for this video. API response: {transcript_data}")
+                            # デバッグ用：エラー時もRawを表示
+                            with st.expander("デバッグ：APIレスポンス（Raw）"):
+                                st.json(transcript_data)
+                            st.error("Could not retrieve transcript for this video. 上のRawレスポンスを確認してね。")
 
 # --- バルクダウンロードセクション ---
 if st.session_state.get("videos"):
