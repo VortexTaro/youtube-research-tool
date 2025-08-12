@@ -2,7 +2,13 @@ import streamlit as st
 import os
 import re
 from datetime import datetime
-from scraper_service import search_youtube, get_channel_details, get_transcript, get_transcript_by_url
+from scraper_service import (
+    search_youtube,
+    get_channel_details,
+    get_transcript,
+    get_transcript_by_url,
+    extract_transcript_text,
+)
 
 # --- 定数 ---
 SEARCH_LIMIT = 20
@@ -13,17 +19,22 @@ os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
 
 st.set_page_config(layout="wide", initial_sidebar_state="expanded", page_title="YouTube Research Tool")
 st.title("YouTube Research Tool")
-st.caption("左上の三本線でサイドバーを開けるよ。下のリンクからもページ移動できる。")
+st.caption("左上の三本線でサイドバーを開けるよ。下のボタンからもページ移動できる。")
 
-# --- Debug Mode ---
-debug_mode = st.sidebar.checkbox("デバッグモードを有効化", value=False)
-log_area = st.sidebar.empty()
+# 明示ナビゲーション（サイドバーが見えない場合のフォールバック）
+nav_col1, nav_col2 = st.columns([1, 3])
+with nav_col1:
+    if st.button("任意URLの一括文字起こしを開く"):
+        try:
+            st.switch_page("pages/01_Bulk_URL_Transcriber.py")
+        except Exception:
+            st.info("サイドバーのPagesから『任意URLの一括文字起こし』を選んでね。")
 
-# 明示的なページリンク（サイドバーが見えない環境向け）
+# 旧式リンク（一部環境で機能しないことがあるためボタンを優先）
 try:
     st.page_link("pages/01_Bulk_URL_Transcriber.py", label="任意URLの一括文字起こしへ →", icon="🗂️")
 except Exception:
-    st.markdown("[任意URLの一括文字起こしへ →](pages/01_Bulk_URL_Transcriber.py)")
+    pass
 
 # --- Session Stateの初期化 ---
 if "videos" not in st.session_state:
@@ -48,14 +59,12 @@ if st.button("Search"):
                 # 1. 動画を検索
                 search_results = search_youtube(search_keyword, limit=SEARCH_LIMIT)
 
-                if debug_mode:
-                    with st.expander("デバッグ：検索APIレスポンス"):
-                        st.json(search_results)
-
                 # 2. APIレスポンスを処理
                 if isinstance(search_results, str):  # APIがエラー文字列を返した場合
                     st.session_state.error = search_results
                     st.session_state.videos = []
+                    with st.expander("デバッグ：検索エラー詳細", expanded=True):
+                        st.code(search_results)
 
                 # 正常に宝箱（辞書型）が返ってきた場合の処理
                 elif search_results and isinstance(search_results, dict) and 'videos' in search_results:
@@ -84,11 +93,15 @@ if st.button("Search"):
 
                 else: # 検索結果が空、または予期しない形式だった場合
                     st.session_state.videos = []
+                    with st.expander("デバッグ：検索レスポンス(不明形式)", expanded=False):
+                        st.write(type(search_results).__name__)
+                        st.json(search_results)
 
             except Exception as e:
                 st.session_state.error = f"An unexpected error occurred: {e}"
                 st.session_state.videos = []
-                st.exception(e) # 詳細なエラーをコンソールと画面に出力
+                with st.expander("デバッグ：検索例外詳細", expanded=True):
+                    st.exception(e)
     else:
         st.warning("Please enter a keyword to search.")
 
@@ -137,23 +150,11 @@ if st.session_state.get("videos") is not None:
                         try:
                             transcript_data = get_transcript(url, hl="ja", gl="JP")
                         except Exception as e:
-                            if debug_mode:
-                                log_area.error(f"Exception: {e}")
+                            with st.expander("デバッグ：ダウンロード例外詳細", expanded=True):
+                                st.exception(e)
 
-                        # Check if the transcript is a valid string
-                        transcript_text = None
-                        if isinstance(transcript_data, dict) and "transcript" in transcript_data:
-                            raw_transcript = transcript_data.get("transcript")
-                            if isinstance(raw_transcript, list):
-                                processed_lines = []
-                                for item in raw_transcript:
-                                    if isinstance(item, dict) and 'text' in item:
-                                        processed_lines.append(item['text'])
-                                    elif isinstance(item, str):
-                                        processed_lines.append(item)
-                                transcript_text = "\n".join(processed_lines)
-                            elif isinstance(raw_transcript, str):
-                                transcript_text = raw_transcript
+                        # transcript抽出（APIの形状差を吸収）
+                        transcript_text = extract_transcript_text(transcript_data) if isinstance(transcript_data, dict) else None
                         
                         if transcript_text:
                             # ファイル名をサニタイズ
@@ -185,9 +186,8 @@ if st.session_state.get("videos") is not None:
                             )
                         else:
                             st.error("Could not retrieve transcript for this video.")
-                            if debug_mode:
-                                with st.expander("デバッグ：APIレスポンス（Raw）"):
-                                    st.json(transcript_data)
+                            with st.expander("デバッグ：APIレスポンス（Raw）", expanded=True):
+                                st.json(transcript_data)
 
 # --- バルクダウンロードセクション ---
 if st.session_state.get("videos"):
@@ -203,20 +203,7 @@ if st.session_state.get("videos"):
             url = video.get('url', '#')
             bulk_status.text(f"Downloading transcript for '{title[:30]}...' ({i+1}/{len(st.session_state.videos)})")
             transcript_data = get_transcript(url)
-
-            transcript_text = None
-            if isinstance(transcript_data, dict) and "transcript" in transcript_data:
-                raw_transcript = transcript_data.get("transcript")
-                if isinstance(raw_transcript, list):
-                    processed_lines = []
-                    for item in raw_transcript:
-                        if isinstance(item, dict) and 'text' in item:
-                            processed_lines.append(item['text'])
-                        elif isinstance(item, str):
-                            processed_lines.append(item)
-                    transcript_text = "\n".join(processed_lines)
-                elif isinstance(raw_transcript, str):
-                    transcript_text = raw_transcript
+            transcript_text = extract_transcript_text(transcript_data) if isinstance(transcript_data, dict) else None
             
             if transcript_text:
                 channel_name = video.get('channel', {}).get('title', 'N/A')

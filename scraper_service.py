@@ -1,5 +1,6 @@
 import os
 import re
+from typing import Any, Dict, List, Optional
 import requests
 from urllib.parse import quote
 import time
@@ -159,3 +160,64 @@ def get_transcript(
         max_retries=max_retries,
         retry_wait_sec=retry_wait_sec,
     )
+
+
+def _flatten_text_list(items: List[Any]) -> str:
+    texts: List[str] = []
+    for it in items:
+        if isinstance(it, dict):
+            for key in ["text", "caption", "line"]:
+                if key in it and isinstance(it[key], str):
+                    texts.append(it[key])
+                    break
+        elif isinstance(it, str):
+            texts.append(it)
+    return "\n".join(t for t in texts if t)
+
+
+def extract_transcript_text(response: Any) -> Optional[str]:
+    if not isinstance(response, dict):
+        return None
+
+    payload: Dict[str, Any] = response
+    # unwrap common envelope keys
+    for key in ["data", "result", "video", "response"]:
+        if isinstance(payload.get(key), dict):
+            payload = payload[key]  # type: ignore[assignment]
+
+    # 1) direct plain text
+    plain = payload.get("transcript_only_text")
+    if isinstance(plain, str) and plain.strip():
+        return plain.strip()
+
+    # 2) transcript variants
+    tr = payload.get("transcript")
+    if isinstance(tr, str) and tr.strip():
+        return tr.strip()
+    if isinstance(tr, list):
+        text = _flatten_text_list(tr)
+        return text if text.strip() else None
+    if isinstance(tr, dict):
+        for list_key in ["segments", "items", "events", "lines"]:
+            if isinstance(tr.get(list_key), list):
+                text = _flatten_text_list(tr[list_key])
+                if text.strip():
+                    return text
+
+    # 3) alternates
+    for alt in ["captions", "subtitles"]:
+        val = payload.get(alt)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+        if isinstance(val, list):
+            text = _flatten_text_list(val)
+            if text.strip():
+                return text
+        if isinstance(val, dict):
+            for list_key in ["segments", "items", "events", "lines"]:
+                if isinstance(val.get(list_key), list):
+                    text = _flatten_text_list(val[list_key])
+                    if text.strip():
+                        return text
+
+    return None

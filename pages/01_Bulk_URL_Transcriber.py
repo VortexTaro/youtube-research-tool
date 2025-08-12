@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import re
 from datetime import datetime
-from scraper_service import get_transcript_by_url
+from scraper_service import get_transcript_by_url, extract_transcript_text
 import csv
 from io import StringIO
 
@@ -15,8 +15,6 @@ TRANSCRIPTS_DIR = os.path.join(os.path.dirname(__file__), '..', 'transcripts')
 os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
 
 st.caption("各行に1つのURLを貼り付けてください。対応: YouTube, TikTok, Instagram")
-debug_mode = st.sidebar.checkbox("デバッグモード", value=False)
-bulk_log = st.sidebar.empty()
 bulk_urls_text = st.text_area(
     "URLリスト",
     height=180,
@@ -54,19 +52,7 @@ if st.button("一括文字起こしを実行"):
             status.text(f"({idx+1}/{len(urls)}) 取得中: {url[:80]}")
             try:
                 data = get_transcript_by_url(url, hl=hl, gl=gl, max_retries=max_retries, retry_wait_sec=retry_wait_sec)
-                transcript_text = None
-                if isinstance(data, dict) and "transcript" in data:
-                    raw = data.get("transcript")
-                    if isinstance(raw, list):
-                        lines = []
-                        for item in raw:
-                            if isinstance(item, dict) and 'text' in item:
-                                lines.append(item['text'])
-                            elif isinstance(item, str):
-                                lines.append(item)
-                        transcript_text = "\n".join(lines)
-                    elif isinstance(raw, str):
-                        transcript_text = raw
+                transcript_text = extract_transcript_text(data) if isinstance(data, dict) else None
 
                 if transcript_text:
                     header = (
@@ -82,8 +68,9 @@ if st.button("一括文字起こしを実行"):
             except Exception as e:
                 results.append(f"URL: {url}\nERROR: {e}\n\n")
                 csv_rows.append([url, "", "ERROR", 0])
-                if debug_mode:
-                    bulk_log.error(f"Exception at {url}: {e}")
+                with st.expander("デバッグ：例外詳細", expanded=True):
+                    st.write(url)
+                    st.exception(e)
             progress.progress((idx+1)/len(urls))
 
         if results:
@@ -108,9 +95,10 @@ if st.button("一括文字起こしを実行"):
                 mime="text/csv",
             )
 
-            if debug_mode:
-                with st.expander("デバッグ：処理ログと先頭プレビュー"):
-                    st.text("\n".join([r[:200] for r in results[:3]]))
+            with st.expander("デバッグ：処理ログと先頭プレビュー"):
+                st.text("\n".join([r[:200] for r in results[:3]]))
+            with st.expander("デバッグ：処理ログと先頭プレビュー"):
+                st.text("\n".join([r[:200] for r in results[:3]]))
         else:
             status.error("文字起こし結果が空だよ。")
 
