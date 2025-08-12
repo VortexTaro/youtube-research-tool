@@ -15,6 +15,10 @@ st.set_page_config(layout="wide", initial_sidebar_state="expanded", page_title="
 st.title("YouTube Research Tool")
 st.caption("左上の三本線でサイドバーを開けるよ。下のリンクからもページ移動できる。")
 
+# --- Debug Mode ---
+debug_mode = st.sidebar.checkbox("デバッグモードを有効化", value=False)
+log_area = st.sidebar.empty()
+
 # 明示的なページリンク（サイドバーが見えない環境向け）
 try:
     st.page_link("pages/01_Bulk_URL_Transcriber.py", label="任意URLの一括文字起こしへ →", icon="🗂️")
@@ -44,7 +48,9 @@ if st.button("Search"):
                 # 1. 動画を検索
                 search_results = search_youtube(search_keyword, limit=SEARCH_LIMIT)
 
-                # デバッグ情報の表示は省略
+                if debug_mode:
+                    with st.expander("デバッグ：検索APIレスポンス"):
+                        st.json(search_results)
 
                 # 2. APIレスポンスを処理
                 if isinstance(search_results, str):  # APIがエラー文字列を返した場合
@@ -127,7 +133,12 @@ if st.session_state.get("videos") is not None:
                 if st.button("Download Transcript", key=f"download_{i}"):
                     with st.spinner(f"Downloading transcript for '{title[:30]}...'"):
                         # 言語オプション（簡易）。必要ならUIに昇格可能
-                        transcript_data = get_transcript(url, hl="ja", gl="JP")
+                        transcript_data = None
+                        try:
+                            transcript_data = get_transcript(url, hl="ja", gl="JP")
+                        except Exception as e:
+                            if debug_mode:
+                                log_area.error(f"Exception: {e}")
 
                         # Check if the transcript is a valid string
                         transcript_text = None
@@ -174,6 +185,9 @@ if st.session_state.get("videos") is not None:
                             )
                         else:
                             st.error("Could not retrieve transcript for this video.")
+                            if debug_mode:
+                                with st.expander("デバッグ：APIレスポンス（Raw）"):
+                                    st.json(transcript_data)
 
 # --- バルクダウンロードセクション ---
 if st.session_state.get("videos"):
