@@ -11,9 +11,15 @@ os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
 
 # --- Streamlit App ---
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", initial_sidebar_state="expanded", page_title="YouTube Research Tool")
 st.title("YouTube Research Tool")
-st.caption("サイドバーのPagesから『任意URLの一括文字起こし』ページも使えるよ。")
+st.caption("左上の三本線でサイドバーを開けるよ。下のリンクからもページ移動できる。")
+
+# 明示的なページリンク（サイドバーが見えない環境向け）
+try:
+    st.page_link("pages/01_Bulk_URL_Transcriber.py", label="任意URLの一括文字起こしへ →", icon="🗂️")
+except Exception:
+    st.markdown("[任意URLの一括文字起こしへ →](pages/01_Bulk_URL_Transcriber.py)")
 
 # --- Session Stateの初期化 ---
 if "videos" not in st.session_state:
