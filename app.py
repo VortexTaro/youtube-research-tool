@@ -102,6 +102,10 @@ if st.button("一括文字起こしを実行"):
         else:
             status.error("文字起こし結果が空だよ。")
 
+# 検索セクションはページ最下部へ
+st.write("---")
+st.subheader("YouTubeキーワード検索（オプション設定は上の一括フォームを参照）")
+
 # --- Session Stateの初期化 ---
 if "videos" not in st.session_state:
     st.session_state.videos = None
@@ -122,8 +126,19 @@ if st.button("Search"):
 
         with st.spinner("Searching for videos..."):
             try:
-                # 1. 動画を検索
-                search_results = search_youtube(search_keyword, limit=SEARCH_LIMIT)
+                # 1. 動画を検索（言語・地域・リトライを反映）
+                opt_hl = st.session_state.get("opt_hl", "ja")
+                opt_gl = st.session_state.get("opt_gl", "JP")
+                opt_retries = st.session_state.get("opt_retries", 2)
+                opt_retry_wait = st.session_state.get("opt_retry_wait", 1.5)
+                search_results = search_youtube(
+                    search_keyword,
+                    limit=SEARCH_LIMIT,
+                    hl=opt_hl,
+                    gl=opt_gl,
+                    max_retries=opt_retries,
+                    retry_wait_sec=opt_retry_wait,
+                )
 
                 # 2. APIレスポンスを処理
                 if isinstance(search_results, str):  # APIがエラー文字列を返した場合
@@ -214,7 +229,17 @@ if st.session_state.get("videos") is not None:
                         # 言語オプション（簡易）。必要ならUIに昇格可能
                         transcript_data = None
                         try:
-                            transcript_data = get_transcript(url, hl="ja", gl="JP")
+                            opt_hl = st.session_state.get("opt_hl", "ja")
+                            opt_gl = st.session_state.get("opt_gl", "JP")
+                            opt_retries = st.session_state.get("opt_retries", 2)
+                            opt_retry_wait = st.session_state.get("opt_retry_wait", 1.5)
+                            transcript_data = get_transcript(
+                                url,
+                                hl=opt_hl,
+                                gl=opt_gl,
+                                max_retries=opt_retries,
+                                retry_wait_sec=opt_retry_wait,
+                            )
                         except Exception as e:
                             with st.expander("デバッグ：ダウンロード例外詳細", expanded=True):
                                 st.exception(e)
@@ -268,7 +293,18 @@ if st.session_state.get("videos"):
             title = video.get('title', 'No Title')
             url = video.get('url', '#')
             bulk_status.text(f"Downloading transcript for '{title[:30]}...' ({i+1}/{len(st.session_state.videos)})")
-            transcript_data = get_transcript(url)
+            # Bulk download also respects settings
+            opt_hl = st.session_state.get("opt_hl", "ja")
+            opt_gl = st.session_state.get("opt_gl", "JP")
+            opt_retries = st.session_state.get("opt_retries", 2)
+            opt_retry_wait = st.session_state.get("opt_retry_wait", 1.5)
+            transcript_data = get_transcript(
+                url,
+                hl=opt_hl,
+                gl=opt_gl,
+                max_retries=opt_retries,
+                retry_wait_sec=opt_retry_wait,
+            )
             transcript_text = extract_transcript_text(transcript_data) if isinstance(transcript_data, dict) else None
             
             if transcript_text:
