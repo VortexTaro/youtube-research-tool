@@ -15,10 +15,6 @@ st.set_page_config(layout="wide", initial_sidebar_state="expanded", page_title="
 st.title("YouTube Research Tool")
 st.caption("左上の三本線でサイドバーを開けるよ。下のリンクからもページ移動できる。")
 
-# --- Debug Mode ---
-debug_mode = st.sidebar.checkbox("デバッグモードを有効化", value=False)
-log_area = st.sidebar.empty()
-
 # 明示的なページリンク（サイドバーが見えない環境向け）
 try:
     st.page_link("pages/01_Bulk_URL_Transcriber.py", label="任意URLの一括文字起こしへ →", icon="🗂️")
@@ -48,14 +44,14 @@ if st.button("Search"):
                 # 1. 動画を検索
                 search_results = search_youtube(search_keyword, limit=SEARCH_LIMIT)
 
-                if debug_mode:
-                    with st.expander("デバッグ：検索APIレスポンス"):
-                        st.json(search_results)
+                # エラー時は必ずデバッグ情報を表示
 
                 # 2. APIレスポンスを処理
                 if isinstance(search_results, str):  # APIがエラー文字列を返した場合
                     st.session_state.error = search_results
                     st.session_state.videos = []
+                    with st.expander("デバッグ：検索エラー詳細", expanded=True):
+                        st.code(search_results)
 
                 # 正常に宝箱（辞書型）が返ってきた場合の処理
                 elif search_results and isinstance(search_results, dict) and 'videos' in search_results:
@@ -84,11 +80,15 @@ if st.button("Search"):
 
                 else: # 検索結果が空、または予期しない形式だった場合
                     st.session_state.videos = []
+                    with st.expander("デバッグ：検索レスポンス(不明形式)", expanded=False):
+                        st.write(type(search_results).__name__)
+                        st.json(search_results)
 
             except Exception as e:
                 st.session_state.error = f"An unexpected error occurred: {e}"
                 st.session_state.videos = []
-                st.exception(e) # 詳細なエラーをコンソールと画面に出力
+                with st.expander("デバッグ：検索例外詳細", expanded=True):
+                    st.exception(e)
     else:
         st.warning("Please enter a keyword to search.")
 
@@ -137,8 +137,8 @@ if st.session_state.get("videos") is not None:
                         try:
                             transcript_data = get_transcript(url, hl="ja", gl="JP")
                         except Exception as e:
-                            if debug_mode:
-                                log_area.error(f"Exception: {e}")
+                            with st.expander("デバッグ：ダウンロード例外詳細", expanded=True):
+                                st.exception(e)
 
                         # Check if the transcript is a valid string
                         transcript_text = None
@@ -185,9 +185,8 @@ if st.session_state.get("videos") is not None:
                             )
                         else:
                             st.error("Could not retrieve transcript for this video.")
-                            if debug_mode:
-                                with st.expander("デバッグ：APIレスポンス（Raw）"):
-                                    st.json(transcript_data)
+                            with st.expander("デバッグ：APIレスポンス（Raw）", expanded=True):
+                                st.json(transcript_data)
 
 # --- バルクダウンロードセクション ---
 if st.session_state.get("videos"):

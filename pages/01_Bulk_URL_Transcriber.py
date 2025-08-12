@@ -15,8 +15,6 @@ TRANSCRIPTS_DIR = os.path.join(os.path.dirname(__file__), '..', 'transcripts')
 os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
 
 st.caption("各行に1つのURLを貼り付けてください。対応: YouTube, TikTok, Instagram")
-debug_mode = st.sidebar.checkbox("デバッグモード", value=False)
-bulk_log = st.sidebar.empty()
 bulk_urls_text = st.text_area(
     "URLリスト",
     height=180,
@@ -82,8 +80,9 @@ if st.button("一括文字起こしを実行"):
             except Exception as e:
                 results.append(f"URL: {url}\nERROR: {e}\n\n")
                 csv_rows.append([url, "", "ERROR", 0])
-                if debug_mode:
-                    bulk_log.error(f"Exception at {url}: {e}")
+                with st.expander("デバッグ：例外詳細", expanded=True):
+                    st.write(url)
+                    st.exception(e)
             progress.progress((idx+1)/len(urls))
 
         if results:
@@ -108,9 +107,8 @@ if st.button("一括文字起こしを実行"):
                 mime="text/csv",
             )
 
-            if debug_mode:
-                with st.expander("デバッグ：処理ログと先頭プレビュー"):
-                    st.text("\n".join([r[:200] for r in results[:3]]))
+            with st.expander("デバッグ：処理ログと先頭プレビュー"):
+                st.text("\n".join([r[:200] for r in results[:3]]))
         else:
             status.error("文字起こし結果が空だよ。")
 
