@@ -38,10 +38,7 @@ if st.button("Search"):
                 # 1. 動画を検索
                 search_results = search_youtube(search_keyword, limit=SEARCH_LIMIT)
 
-                # --- デバッグ情報 ---
-                with st.expander("デバッグ情報：APIからの生データ"):
-                    st.json(search_results)
-                # --- デバッグ情報終わり ---
+                # デバッグ情報の表示は省略
 
                 # 2. APIレスポンスを処理
                 if isinstance(search_results, str):  # APIがエラー文字列を返した場合
@@ -123,7 +120,8 @@ if st.session_state.get("videos") is not None:
 
                 if st.button("Download Transcript", key=f"download_{i}"):
                     with st.spinner(f"Downloading transcript for '{title[:30]}...'"):
-                        transcript_data = get_transcript(url)
+                        # 言語オプション（簡易）。必要ならUIに昇格可能
+                        transcript_data = get_transcript(url, hl="ja", gl="JP")
 
                         # Check if the transcript is a valid string
                         transcript_text = None
@@ -160,32 +158,16 @@ if st.session_state.get("videos") is not None:
                             )
                             full_content = header + transcript_text
 
-                            # 先にデバッグ表示（Rawレスポンス・本文プレビュー）
-                            with st.expander("デバッグ：APIレスポンス（Raw）"):
-                                st.json(transcript_data)
-                            with st.expander("プレビュー（保存/ダウンロード前に確認）", expanded=True):
-                                st.text_area(label="Transcript", value=transcript_text, height=200)
-
-                            # 保存とダウンロードをユーザー操作に変更
-                            col1d, col2d = st.columns([1,1])
-                            with col1d:
-                                if st.button("保存する", key=f"save_{i}"):
-                                    with open(filepath, "w", encoding="utf-8") as f:
-                                        f.write(full_content)
-                                    st.success(f"Transcript saved to: {filepath}")
-                            with col2d:
-                                st.download_button(
-                                    label="このトランスクリプトをダウンロード",
-                                    data=full_content,
-                                    file_name=filename,
-                                    mime="text/plain",
-                                    key=f"dl_{i}"
-                                )
+                            # ダウンロードのみ
+                            st.download_button(
+                                label="このトランスクリプトをダウンロード",
+                                data=full_content,
+                                file_name=filename,
+                                mime="text/plain",
+                                key=f"dl_{i}"
+                            )
                         else:
-                            # デバッグ用：エラー時もRawを表示
-                            with st.expander("デバッグ：APIレスポンス（Raw）"):
-                                st.json(transcript_data)
-                            st.error("Could not retrieve transcript for this video. 上のRawレスポンスを確認してね。")
+                            st.error("Could not retrieve transcript for this video.")
 
 # --- バルクダウンロードセクション ---
 if st.session_state.get("videos"):

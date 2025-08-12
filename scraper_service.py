@@ -145,5 +145,17 @@ def get_transcript_by_url(video_url: str, hl: str = "ja", gl: str = "JP", max_re
 
 
 # Backward-compatible alias for existing YouTube flow inside the app
-def get_transcript(video_url: str):
-    return get_transcript_by_url(video_url)
+def get_transcript(
+    video_url: str,
+    hl: str = "ja",
+    gl: str = "JP",
+    max_retries: int = 2,
+    retry_wait_sec: float = 1.5,
+):
+    return get_transcript_by_url(
+        video_url,
+        hl=hl,
+        gl=gl,
+        max_retries=max_retries,
+        retry_wait_sec=retry_wait_sec,
+    )
