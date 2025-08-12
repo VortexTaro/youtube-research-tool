@@ -1,6 +1,8 @@
 import streamlit as st
 import os
 import re
+import csv
+from io import StringIO
 from datetime import datetime
 from scraper_service import (
     search_youtube,
@@ -19,22 +21,86 @@ os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
 
 st.set_page_config(layout="wide", initial_sidebar_state="expanded", page_title="YouTube Research Tool")
 st.title("YouTube Research Tool")
-st.caption("左上の三本線でサイドバーを開けるよ。下のボタンからもページ移動できる。")
+st.caption("左上の三本線でサイドバーを開けるよ。下に一括文字起こしフォームを埋め込んだよ。")
 
-# 明示ナビゲーション（サイドバーが見えない場合のフォールバック）
-nav_col1, nav_col2 = st.columns([1, 3])
-with nav_col1:
-    if st.button("任意URLの一括文字起こしを開く"):
-        try:
-            st.switch_page("pages/01_Bulk_URL_Transcriber.py")
-        except Exception:
-            st.info("サイドバーのPagesから『任意URLの一括文字起こし』を選んでね。")
+st.write("---")
+st.subheader("任意URLの一括文字起こし (YouTube / TikTok / Instagram)")
+bulk_urls_text = st.text_area(
+    "URLリスト (各行1つ)",
+    height=140,
+    placeholder=(
+        "https://www.youtube.com/watch?v=...\n"
+        "https://www.tiktok.com/@user/video/...\n"
+        "https://www.instagram.com/reel/..."
+    ),
+)
+col_opt1, col_opt2, col_opt3 = st.columns([1, 1, 2])
+with col_opt1:
+    opt_hl = st.selectbox("言語(hl)", ["ja", "en"], index=0)
+with col_opt2:
+    opt_gl = st.selectbox("地域(gl)", ["JP", "US"], index=0)
+with col_opt3:
+    opt_retries = st.slider("最大リトライ回数", min_value=0, max_value=5, value=2)
+opt_retry_wait = st.slider("リトライ間隔(秒)", min_value=0.0, max_value=10.0, value=1.5, step=0.5)
+default_filename = datetime.now().strftime("bulk_transcripts_%Y%m%d_%H%M%S.txt")
+bulk_out_name = st.text_input("保存ファイル名（ダウンロード名）", value=default_filename)
+if st.button("一括文字起こしを実行"):
+    urls = [u.strip() for u in bulk_urls_text.splitlines() if u.strip()]
+    if not urls:
+        st.warning("URLを1つ以上入力してね。")
+    else:
+        progress = st.progress(0)
+        status = st.empty()
+        results = []
+        csv_rows = []
+        for idx, url in enumerate(urls):
+            status.text(f"({idx+1}/{len(urls)}) 取得中: {url[:80]}")
+            try:
+                data = get_transcript_by_url(
+                    url, hl=opt_hl, gl=opt_gl, max_retries=opt_retries, retry_wait_sec=opt_retry_wait
+                )
+                text = extract_transcript_text(data) if isinstance(data, dict) else None
+                if text:
+                    header = (
+                        f"URL: {url}\n"
+                        f"Downloaded At: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        f"--- START TRANSCRIPT ---\n\n"
+                    )
+                    results.append(header + text + "\n\n")
+                    csv_rows.append([url, "", "OK", len(text)])
+                else:
+                    results.append(f"URL: {url}\nERROR: Transcript not found or invalid response.\n\n")
+                    csv_rows.append([url, "", "ERROR", 0])
+            except Exception as e:
+                results.append(f"URL: {url}\nERROR: {e}\n\n")
+                csv_rows.append([url, "", "ERROR", 0])
+                with st.expander("デバッグ：例外詳細", expanded=True):
+                    st.write(url)
+                    st.exception(e)
+            progress.progress((idx+1)/len(urls))
 
-# 旧式リンク（一部環境で機能しないことがあるためボタンを優先）
-try:
-    st.page_link("pages/01_Bulk_URL_Transcriber.py", label="任意URLの一括文字起こしへ →", icon="🗂️")
-except Exception:
-    pass
+        if results:
+            combined_text = "".join(results)
+            st.download_button(
+                label="まとめてダウンロード",
+                data=combined_text,
+                file_name=re.sub(r'[\\/*?:"<>|]', "", bulk_out_name),
+                mime="text/plain",
+            )
+            csv_buffer = StringIO()
+            writer = csv.writer(csv_buffer)
+            writer.writerow(["url", "platform", "status", "length"])
+            writer.writerows(csv_rows)
+            st.download_button(
+                label="サマリーCSVをダウンロード",
+                data=csv_buffer.getvalue(),
+                file_name=re.sub(r'[\\/*?:"<>|]', "", bulk_out_name.replace('.txt', '_summary.csv')),
+                mime="text/csv",
+            )
+            with st.expander("デバッグ：処理ログと先頭プレビュー"):
+                st.text("\n".join([r[:200] for r in results[:3]]))
+        else:
+            status.error("文字起こし結果が空だよ。")
 
 # --- Session Stateの初期化 ---
 if "videos" not in st.session_state:
